@@ -15,4 +15,17 @@ enum CallEvent {
   answer,
   missedCall,
   returningCall,
+  callFailure
+}
+
+class CallEventM {
+  final CallEvent callEvent;
+  final String? message;
+
+  CallEventM({required this.callEvent, this.message});
+
+  @override
+  String toString() {
+    return "$callEvent -> $message";
+  }
 }

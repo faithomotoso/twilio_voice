@@ -608,8 +608,8 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
                 Log.d(TAG, "Connect failure");
                 String message = String.format("Call Error: %d, %s", error.getErrorCode(), error.getMessage());
                 Log.e(TAG, message);
-                sendPhoneCallEvents("LOG|" + message);
-
+                // Send error to flutter
+                sendPhoneCallEvents("ConnectFailure|" + message);
             }
 
             @Override

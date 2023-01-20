@@ -135,7 +135,7 @@ class _DialScreenState extends State<DialScreen> with WidgetsBindingObserver {
       ..listen((event) {
         print("voip-onCallStateChanged $event");
 
-        switch (event) {
+        switch (event.callEvent) {
           case CallEvent.answer:
             //at this point android is still paused
             if (Platform.isIOS && state == null ||

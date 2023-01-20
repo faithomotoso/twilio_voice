@@ -14,12 +14,12 @@ class _CallScreenState extends State<CallScreen> {
   var isEnded = false;
 
   String? message = "Connecting...";
-  late StreamSubscription<CallEvent> callStateListener;
+  late StreamSubscription<CallEventM> callStateListener;
   void listenCall() {
     callStateListener = TwilioVoice.instance.callEventsListener.listen((event) {
       print("voip-onCallStateChanged $event");
 
-      switch (event) {
+      switch (event.callEvent) {
         case CallEvent.callEnded:
           print("call Ended");
           if (!isEnded) {

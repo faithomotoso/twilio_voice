@@ -2,9 +2,11 @@ library twilio_voice;
 
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 import 'package:flutter/services.dart';
 
 part 'models/active_call.dart';
+
 part 'models/call_event.dart';
 
 typedef OnDeviceTokenChanged = Function(String token);
@@ -18,14 +20,15 @@ class TwilioVoice {
   TwilioVoice._() : call = Call(_channel);
 
   static final TwilioVoice _instance = TwilioVoice._();
+
   static TwilioVoice get instance => _instance;
 
   late final Call call;
 
-  Stream<CallEvent>? _callEventsListener;
+  Stream<CallEventM>? _callEventsListener;
 
   /// Sends call events
-  Stream<CallEvent> get callEventsListener {
+  Stream<CallEventM> get callEventsListener {
     if (_callEventsListener == null) {
       _callEventsListener = _eventChannel
           .receiveBroadcastStream()
@@ -35,6 +38,7 @@ class TwilioVoice {
   }
 
   OnDeviceTokenChanged? deviceTokenChanged;
+
   void setOnDeviceTokenChanged(OnDeviceTokenChanged deviceTokenChanged) {
     deviceTokenChanged = deviceTokenChanged;
   }
@@ -118,82 +122,83 @@ class TwilioVoice {
     return _channel.invokeMethod("backgroundCallUI", {});
   }
 
-  CallEvent _parseCallEvent(String state) {
+  CallEventM _parseCallEvent(String state) {
     if (state.startsWith("DEVICETOKEN|")) {
       var token = state.split('|')[1];
       if (deviceTokenChanged != null) {
         deviceTokenChanged!(token);
       }
-      return CallEvent.log;
+      return CallEventM(callEvent: CallEvent.log);
     } else if (state.startsWith("LOG|")) {
       List<String> tokens = state.split('|');
-      print(tokens[1]);
+      log(tokens[1]);
 
       // source: https://www.twilio.com/docs/api/errors/31603
       // The callee does not wish to participate in the call.
-      if(tokens[1].contains("31603")) {
-        return CallEvent.declined;
-      } else if(tokens.toString().toLowerCase().contains("call rejected")) {
+      if (tokens[1].contains("31603")) {
+        return CallEventM(callEvent: CallEvent.declined);
+      } else if (tokens.toString().toLowerCase().contains("call rejected")) {
         // Android call reject from string: "LOG|Call Rejected"
-        return CallEvent.declined;
-      } else if(tokens.toString().toLowerCase().contains("rejecting call")) {
+        return CallEventM(callEvent: CallEvent.declined);
+      } else if (tokens.toString().toLowerCase().contains("rejecting call")) {
         // iOS call reject froms tring: "LOG|provider:performEndCallAction: rejecting call"
-        return CallEvent.declined;
+        return CallEventM(callEvent: CallEvent.declined);
       }
-      return CallEvent.log;
+      return CallEventM(callEvent: CallEvent.log);
     } else if (state.startsWith("Connected|")) {
       call._activeCall = createCallFromState(state, initiated: true);
-      print(
-          'Connected - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, StartOn: ${call._activeCall!.initiated}, Direction: ${call._activeCall!.callDirection}');
-      return CallEvent.connected;
+      log('Connected - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, StartOn: ${call._activeCall!.initiated}, Direction: ${call._activeCall!.callDirection}');
+      return CallEventM(callEvent: CallEvent.connected);
     } else if (state.startsWith("Ringing|")) {
       call._activeCall =
           createCallFromState(state, callDirection: CallDirection.outgoing);
 
-      print(
-          'Ringing - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, Direction: ${call._activeCall!.callDirection}');
+      log('Ringing - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, Direction: ${call._activeCall!.callDirection}');
 
-      return CallEvent.ringing;
+      return CallEventM(callEvent: CallEvent.ringing);
     } else if (state.startsWith("Answer")) {
       call._activeCall =
           createCallFromState(state, callDirection: CallDirection.incoming);
-      print(
-          'Answer - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, Direction: ${call._activeCall!.callDirection}');
+      log('Answer - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, Direction: ${call._activeCall!.callDirection}');
 
-      return CallEvent.answer;
+      return CallEventM(callEvent: CallEvent.answer);
     } else if (state.startsWith("ReturningCall")) {
       call._activeCall =
           createCallFromState(state, callDirection: CallDirection.outgoing);
 
-      print(
-          'Returning Call - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, Direction: ${call._activeCall!.callDirection}');
+      log('Returning Call - From: ${call._activeCall!.from}, To: ${call._activeCall!.to}, Direction: ${call._activeCall!.callDirection}');
 
-      return CallEvent.returningCall;
+      return CallEventM(callEvent: CallEvent.returningCall);
+    } else if (state.startsWith("ConnectFailure")) {
+      // Split and return enum with message
+      return CallEventM(
+          callEvent: CallEvent.callFailure,
+          message: state.replaceAll("ConnectFailure|", "").trim());
     }
     switch (state) {
       case 'Ringing':
-        return CallEvent.ringing;
+        return CallEventM(callEvent: CallEvent.ringing);
       case 'Connected':
-        return CallEvent.connected;
+        return CallEventM(callEvent: CallEvent.connected);
       case 'Call Ended':
         call._activeCall = null;
-        return CallEvent.callEnded;
+        return CallEventM(callEvent: CallEvent.callEnded);
       case 'Missed Call':
-        return CallEvent.missedCall;
+        return CallEventM(callEvent: CallEvent.missedCall);
       case 'Unhold':
-        return CallEvent.unhold;
+        return CallEventM(callEvent: CallEvent.unhold);
       case 'Hold':
-        return CallEvent.hold;
+        return CallEventM(callEvent: CallEvent.hold);
       case 'Unmute':
-        return CallEvent.unmute;
+        return CallEventM(callEvent: CallEvent.unmute);
       case 'Mute':
-        return CallEvent.mute;
+        return CallEventM(callEvent: CallEvent.mute);
       case 'Speaker On':
-        return CallEvent.speakerOn;
+        return CallEventM(callEvent: CallEvent.speakerOn);
       case 'Speaker Off':
-        return CallEvent.speakerOff;
+        return CallEventM(callEvent: CallEvent.speakerOff);
       default:
-        print('$state is not a valid CallState.');
+        log('$state is not a valid CallState.');
         throw ArgumentError('$state is not a valid CallState.');
     }
   }
@@ -259,7 +264,8 @@ class Call {
 
   /// Gets the active call's SID. This will be null until the first Ringing event occurs
   Future<String?> getSid() {
-    return _channel.invokeMethod<String?>('call-sid', <String, dynamic>{}).then<String?>((String? value) => value);
+    return _channel.invokeMethod<String?>('call-sid',
+        <String, dynamic>{}).then<String?>((String? value) => value);
   }
 
   /// Answers incoming call
