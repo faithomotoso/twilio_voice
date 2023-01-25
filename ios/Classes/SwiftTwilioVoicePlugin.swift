@@ -435,6 +435,12 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
 //        self.incomingPushCompletionCallback = completion
         
         if (type == PKPushType.voIP) {
+            
+            // Log notification payload
+            let jsonData =  try? JSONSerialization.data(withJSONObject: payload.dictionaryPayload, options: [])
+            let jsonString = String(data: jsonData!, encoding: .ascii)
+            self.sendPhoneCallEvents(description: "LOG|Notification dictionary payload: " + jsonString!, isError: false)
+            
             TwilioVoiceSDK.handleNotification(payload.dictionaryPayload, delegate: self, delegateQueue: nil)
         }
         
@@ -460,6 +466,7 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
     // MARK: TVONotificaitonDelegate
     public func callInviteReceived(callInvite: CallInvite) {
         self.sendPhoneCallEvents(description: "LOG|callInviteReceived:", isError: false)
+        self.sendPhoneCallEvents(description: "LOG|callInvite.from: " + (callInvite.from ?? ""), isError: false)
         
         /**
          * The TTL of a registration is 1 year. The TTL for registration for this device/identity
@@ -764,7 +771,8 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
         
         let callUpdate = CXCallUpdate()
         callUpdate.remoteHandle = callHandle
-        callUpdate.localizedCallerName = clients[from] ?? self.clients["defaultCaller"] ?? defaultCaller
+//        callUpdate.localizedCallerName = clients[from] ?? self.clients["defaultCaller"] ?? defaultCaller
+        callUpdate.localizedCallerName = from
         callUpdate.supportsDTMF = true
         callUpdate.supportsHolding = true
         callUpdate.supportsGrouping = false
