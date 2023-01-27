@@ -63,13 +63,13 @@ public class BackgroundCallJavaActivity extends AppCompatActivity {
         KeyguardManager kgm = (KeyguardManager) getSystemService(Context.KEYGUARD_SERVICE);
         Boolean isKeyguardUp = kgm.inKeyguardRestrictedInputMode();
 
-        Log.d(TAG, "isKeyguardUp $isKeyguardUp");
+        Log.d(TAG, "isKeyguardUp in BackgroundCallJavaActivity -> " + isKeyguardUp);
         if (isKeyguardUp) {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 setTurnScreenOn(true);
                 setShowWhenLocked(true);
-                kgm.requestDismissKeyguard(this, null);
+//                kgm.requestDismissKeyguard(this, null);
 
             } else {
                 wakeLock = powerManager.newWakeLock(PowerManager.FULL_WAKE_LOCK, TAG);
@@ -98,7 +98,8 @@ public class BackgroundCallJavaActivity extends AppCompatActivity {
                 String fromId = intent.getStringExtra(Constants.CALL_FROM).replace("client:", "");
 
                 SharedPreferences preferences = getApplicationContext().getSharedPreferences(TwilioPreferences, Context.MODE_PRIVATE);
-                String caller = preferences.getString(fromId, preferences.getString("defaultCaller", getString(R.string.unknown_caller)));
+//                String caller = preferences.getString(fromId, preferences.getString("defaultCaller", getString(R.string.unknown_caller)));
+                String caller = fromId;
                 Log.d(TAG, "handleCallIntent");
                 Log.d(TAG, "caller from");
                 Log.d(TAG, caller);
@@ -168,7 +169,6 @@ public class BackgroundCallJavaActivity extends AppCompatActivity {
             public void onClick(View v) {
                 sendIntent(Constants.ACTION_END_CALL);
                 finish();
-
             }
         });
         btnOutput.setOnClickListener(new View.OnClickListener() {
@@ -217,6 +217,7 @@ public class BackgroundCallJavaActivity extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
+        Log.d(TAG, "onDestroy: destroying BackgroundCallActivity");
         deactivateSensor();
     }
 

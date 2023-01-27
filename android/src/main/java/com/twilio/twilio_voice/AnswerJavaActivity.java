@@ -55,7 +55,12 @@ public class AnswerJavaActivity extends AppCompatActivity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        Log.d(TAG, "onCreate: AnswerJavaActivity created");
         setContentView(R.layout.activity_answer);
+
+        // Because for some reason, this activity loses the activeCall variable when ending the call from
+
+        activeCall = TwilioVoicePlugin.getActiveCall();
 
         tvUserName = (TextView) findViewById(R.id.tvUserName);
         tvCallStatus = (TextView) findViewById(R.id.tvCallStatus);
@@ -69,13 +74,13 @@ public class AnswerJavaActivity extends AppCompatActivity {
         voiceBroadcastReceiver = new VoiceBroadcastReceiver();
         registerReceiver();
 
-        Log.d(TAG, "isKeyguardUp $isKeyguardUp");
+        Log.d(TAG, "isKeyguardUp in AnswerActivity -> " + isKeyguardUp);
         if (isKeyguardUp) {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                 setTurnScreenOn(true);
                 setShowWhenLocked(true);
-                kgm.requestDismissKeyguard(this, null);
+//                kgm.requestDismissKeyguard(this, null);
             } else {
                 PowerManager pm = (PowerManager) getSystemService(Context.POWER_SERVICE);
                 wakeLock = pm.newWakeLock(PowerManager.FULL_WAKE_LOCK, TAG);
@@ -96,12 +101,17 @@ public class AnswerJavaActivity extends AppCompatActivity {
 
     private void handleIncomingCallIntent(Intent intent) {
         if (intent != null && intent.getAction() != null) {
-            Log.d(TAG, "handleIncomingCallIntent-");
             String action = intent.getAction();
+            Log.d(TAG, "handleIncomingCallIntent for action -> " + action);
+
+            String source = intent.getStringExtra("Source");
+            if (source != null) {
+                Log.d(TAG, "handleIncomingCallIntent: Source -> " + source);
+            }
+
             activeCallInvite = intent.getParcelableExtra(Constants.INCOMING_CALL_INVITE);
             activeCallNotificationId = intent.getIntExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, 0);
             tvCallStatus.setText(R.string.incoming_call_title);
-            Log.d(TAG, action);
             switch (action) {
                 case Constants.ACTION_INCOMING_CALL:
                 case Constants.ACTION_INCOMING_CALL_NOTIFICATION:
@@ -115,9 +125,18 @@ public class AnswerJavaActivity extends AppCompatActivity {
                     break;
                 case Constants.ACTION_END_CALL:
                     Log.d(TAG, "ending call" + activeCall != null ? "TRue" : "False");
-                    activeCall.disconnect();
-                    initiatedDisconnect = true;
-                    finish();
+                    try {
+                        getActiveCall().disconnect();
+                        initiatedDisconnect = true;
+                    } catch (NullPointerException e) {
+                        e.printStackTrace();
+                        Log.e(TAG, "handleIncomingCallIntent: " + e.getMessage());
+                    } finally {
+                        // This removes the app from the app switcher/recents
+                        // This works because we use a different taskAffinity of this activity from the
+                        // main flutter application
+                        finishAndRemoveTask();
+                    }
                     break;
                 case Constants.ACTION_TOGGLE_MUTE:
                     boolean muted = activeCall.isMuted();
@@ -153,7 +172,7 @@ public class AnswerJavaActivity extends AppCompatActivity {
             String fromId = activeCallInvite.getFrom().replace("client:", "");
             SharedPreferences preferences = getApplicationContext().getSharedPreferences(TwilioPreferences, Context.MODE_PRIVATE);
             String caller = preferences.getString(fromId, preferences.getString("defaultCaller", getString(R.string.unknown_caller)));
-            tvUserName.setText(caller);
+            tvUserName.setText(fromId);
 
             btnAnswer.setOnClickListener(new View.OnClickListener() {
                 @Override
@@ -191,27 +210,45 @@ public class AnswerJavaActivity extends AppCompatActivity {
         acceptIntent.putExtra(Constants.INCOMING_CALL_INVITE, activeCallInvite);
         acceptIntent.putExtra(Constants.ACCEPT_CALL_ORIGIN, 1);
         acceptIntent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, activeCallNotificationId);
+        acceptIntent.putExtra("Source", "AnswerActivity#acceptCall");
         Log.d(TAG, "Clicked accept startService");
+        // Starting the service calls endForeground in IncomingCallNotificationService to remove the notification
         startService(acceptIntent);
-        if (TwilioVoicePlugin.hasStarted) {
-            finish();
-        } else {
-            Log.d(TAG, "Answering call");
-            activeCallInvite.accept(this, callListener);
-            notificationManager.cancel(activeCallNotificationId);
-        }
+        Log.d(TAG, "Answering call");
+        activeCallInvite.accept(this, callListener);
+        Log.d(TAG, "acceptCall: canceling notification with id -> " + activeCallNotificationId);
+        notificationManager.cancel(activeCallNotificationId);
+
+        // Codes below don't work as expected, answering the call with activeCallInvite.accept()
+        // Connects the call and launches the BackgroundCallJavaActivity as intended
+//        startService(acceptIntent);
+//        if (TwilioVoicePlugin.hasStarted) {
+//            finish();
+//        } else {
+//            Log.d(TAG, "Answering call");
+//            activeCallInvite.accept(this, callListener);
+//            notificationManager.cancel(activeCallNotificationId);
+//        }
     }
 
+    // This is called in the Twilio call listener when the call connects
+    // Which is async and there might be an unintended delay that'll retain the call ringing page
+    // even after the call is picked up like nothing happened.
+    // Solution would be to have a Connecting... state while waiting for the call listener
     private void startAnswerActivity(Call call) {
         Intent intent = new Intent(this, BackgroundCallJavaActivity.class);
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         intent.putExtra(Constants.CALL_FROM, call.getFrom());
         startActivity(intent);
         Log.d(TAG, "Connected");
+
+        // End AnswerJavaActivity
+        finish();
     }
 
     private void endCall() {
+        Log.d(TAG, "endCall: with initiatedDisconnect -> " + initiatedDisconnect);
 
         if (!initiatedDisconnect) {
             Intent intent = new Intent(this, BackgroundCallJavaActivity.class);
@@ -227,6 +264,11 @@ public class AnswerJavaActivity extends AppCompatActivity {
     }
 
     Call activeCall;
+
+    private  Call getActiveCall() {
+        if (activeCall != null) return activeCall;
+        return TwilioVoicePlugin.getActiveCall();
+    }
 
     private Call.Listener callListener() {
         return new Call.Listener() {
@@ -246,6 +288,8 @@ public class AnswerJavaActivity extends AppCompatActivity {
             @Override
             public void onConnected(@NonNull Call call) {
                 activeCall = call;
+                // Update the call variable sent to Flutter
+                TwilioVoicePlugin.setActiveCall(call);
                 startAnswerActivity(call);
             }
 
@@ -331,7 +375,7 @@ public class AnswerJavaActivity extends AppCompatActivity {
 //    }
 
     private void newCancelCallClickListener() {
-        finish();
+        finishAndRemoveTask();
     }
 
     private void rejectCallClickListener() {
@@ -341,7 +385,7 @@ public class AnswerJavaActivity extends AppCompatActivity {
             rejectIntent.setAction(Constants.ACTION_REJECT);
             rejectIntent.putExtra(Constants.INCOMING_CALL_INVITE, activeCallInvite);
             startService(rejectIntent);
-            finish();
+            finishAndRemoveTask();
         }
     }
 

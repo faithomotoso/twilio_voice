@@ -104,7 +104,7 @@ public class VoiceFirebaseMessagingService extends FirebaseMessagingService {
         Intent intent = new Intent(this, IncomingCallNotificationService.class);
         intent.setAction(Constants.ACTION_CANCEL_CALL);
         intent.putExtra(Constants.CANCELLED_CALL_INVITE, cancelledCallInvite);
-
+        Log.d(TAG, "handleCanceledCallInvite: Received canceled call invite, starting service");
         startService(intent);
     }
 }

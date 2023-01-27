@@ -22,6 +22,7 @@ import androidx.lifecycle.Lifecycle;
 import androidx.lifecycle.ProcessLifecycleOwner;
 import androidx.localbroadcastmanager.content.LocalBroadcastManager;
 
+import com.twilio.twilio_voice.util.PkgUtil;
 import com.twilio.voice.CallInvite;
 import com.twilio.voice.CancelledCallInvite;
 
@@ -43,6 +44,8 @@ public class IncomingCallNotificationService extends Service {
                     break;
                 case Constants.ACTION_ACCEPT:
                     int origin = intent.getIntExtra(Constants.ACCEPT_CALL_ORIGIN, 0);
+                    String source = intent.getStringExtra("Source");
+                    Log.d(TAG, "onStartCommand: Source of action_accept intent -> " + source);
                     Log.d(TAG, "onStartCommand-ActionAccept" + origin);
                     accept(callInvite, notificationId, origin);
                     break;
@@ -74,7 +77,8 @@ public class IncomingCallNotificationService extends Service {
         intent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, notificationId);
         intent.putExtra(Constants.INCOMING_CALL_INVITE, callInvite);
         intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP);
-        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, PendingIntent.FLAG_UPDATE_CURRENT);
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        PendingIntent pendingIntent = PendingIntent.getActivity(this, notificationId, intent, PkgUtil.getPendingIntentFlag());
         /*
          * Pass the notification id and call sid to use as an identifier to cancel the
          * notification later
@@ -90,7 +94,7 @@ public class IncomingCallNotificationService extends Service {
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             Log.i(TAG, "building notification for new phones");
-            return buildNotification(getApplicationName(context), getString(R.string.new_call, caller),
+            return buildNotification(getApplicationName(context), getString(R.string.new_call, fromId),
                     pendingIntent,
                     extras,
                     callInvite,
@@ -102,7 +106,7 @@ public class IncomingCallNotificationService extends Service {
             return new NotificationCompat.Builder(this)
                     .setSmallIcon(R.drawable.ic_call_end_white_24dp)
                     .setContentTitle(getApplicationName(context))
-                    .setContentText(getString(R.string.new_call, caller))
+                    .setContentText(getString(R.string.new_call, fromId))
                     .setAutoCancel(true)
                     .setOngoing(true)
                     .setExtras(extras)
@@ -135,19 +139,20 @@ public class IncomingCallNotificationService extends Service {
                                            final CallInvite callInvite,
                                            int notificationId,
                                            String channelId) {
-        Log.d(TAG, "Building notification");
+        Log.d(TAG, "Building notification with id -> " + notificationId);
         Intent rejectIntent = new Intent(getApplicationContext(), IncomingCallNotificationService.class);
         rejectIntent.setAction(Constants.ACTION_REJECT);
         rejectIntent.putExtra(Constants.INCOMING_CALL_INVITE, callInvite);
         rejectIntent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, notificationId);
-        PendingIntent piRejectIntent = PendingIntent.getService(getApplicationContext(), 0, rejectIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent piRejectIntent = PendingIntent.getService(getApplicationContext(), 0, rejectIntent, PkgUtil.getPendingIntentFlag());
 
         Intent acceptIntent = new Intent(getApplicationContext(), IncomingCallNotificationService.class);
         acceptIntent.setAction(Constants.ACTION_ACCEPT);
         acceptIntent.putExtra(Constants.ACCEPT_CALL_ORIGIN, 0);
         acceptIntent.putExtra(Constants.INCOMING_CALL_INVITE, callInvite);
         acceptIntent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, notificationId);
-        PendingIntent piAcceptIntent = PendingIntent.getService(getApplicationContext(), 0, acceptIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        acceptIntent.putExtra("Source", "IncomingCallNotificationService#buildNotification");
+        PendingIntent piAcceptIntent = PendingIntent.getService(getApplicationContext(), 0, acceptIntent, PkgUtil.getPendingIntentFlag());
 
         long[] mVibratePattern = new long[]{0, 400, 400, 400, 400, 400, 400, 400};
         Notification.Builder builder =
@@ -209,12 +214,13 @@ public class IncomingCallNotificationService extends Service {
         activeCallIntent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, notificationId);
         activeCallIntent.putExtra(Constants.ACCEPT_CALL_ORIGIN, origin);
         activeCallIntent.setAction(Constants.ACTION_ACCEPT);
+        activeCallIntent.putExtra("Source", "IncomingCallNotificationService#accept");
         if (origin == 0 && !isAppVisible()) {
             startActivity(activeCallIntent);
             Log.i(TAG, "starting activity");
         } else {
             LocalBroadcastManager.getInstance(this).sendBroadcast(activeCallIntent);
-            Log.i(TAG, "sending broadcast intent");
+            Log.i(TAG, "sending broadcast intent from IncomingCallNotificationService#accept");
         }
     }
 
@@ -258,14 +264,14 @@ public class IncomingCallNotificationService extends Service {
         Context context = getApplicationContext();
         SharedPreferences preferences = context.getSharedPreferences(TwilioPreferences, Context.MODE_PRIVATE);
         String callerName = preferences.getString(fromId, preferences.getString("defaultCaller", "Unknown caller"));
-        String title = getString(R.string.notification_missed_call, callerName);
+        String title = getString(R.string.notification_missed_call, fromId);
 
 
         Intent returnCallIntent = new Intent(getApplicationContext(), IncomingCallNotificationService.class);
         returnCallIntent.setAction(Constants.ACTION_RETURN_CALL);
         returnCallIntent.putExtra(Constants.CALL_TO, to);
         returnCallIntent.putExtra(Constants.CALL_FROM, callerId);
-        PendingIntent piReturnCallIntent = PendingIntent.getService(getApplicationContext(), 0, returnCallIntent, PendingIntent.FLAG_UPDATE_CURRENT);
+        PendingIntent piReturnCallIntent = PendingIntent.getService(getApplicationContext(), 0, returnCallIntent, PkgUtil.getPendingIntentFlag());
 
 
         Notification notification;
@@ -279,7 +285,8 @@ public class IncomingCallNotificationService extends Service {
                             .setContentTitle(title)
                             .setCategory(Notification.CATEGORY_CALL)
                             .setAutoCancel(true)
-                            .addAction(android.R.drawable.ic_menu_call, getString(R.string.twilio_call_back), piReturnCallIntent)
+                            // For my use-case, calling back won't be needed
+//                            .addAction(android.R.drawable.ic_menu_call, getString(R.string.twilio_call_back), piReturnCallIntent)
                             .setPriority(NotificationCompat.PRIORITY_HIGH)
                             .setContentTitle(getApplicationName(context))
                             .setContentText(title)
@@ -351,7 +358,8 @@ public class IncomingCallNotificationService extends Service {
         intent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, notificationId);
         intent.putExtra(Constants.INCOMING_CALL_INVITE, callInvite);
         intent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        Log.d(TAG, "Starting answer activity for call from " + callInvite.getFrom());
         startActivity(intent);
     }
 

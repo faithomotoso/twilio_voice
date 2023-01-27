@@ -71,7 +71,7 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
 
     private NotificationManager notificationManager;
     private CallInvite activeCallInvite;
-    private Call activeCall;
+    private static Call activeCall;
     private int activeCallNotificationId;
     private Context context;
     private Activity activity;
@@ -88,8 +88,18 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
 
     private SharedPreferences pSharedPref;
 
+    // Setter to be used from AnswerJavaActivity when a user answers a call from a terminated state
+    public static void setActiveCall(Call call) {
+        activeCall = call;
+    }
+
+    public static Call getActiveCall() {
+        return activeCall;
+    }
+
     @Override
     public void onAttachedToEngine(@NonNull FlutterPluginBinding flutterPluginBinding) {
+        Log.d(TAG, "onAttachedToEngine: called");
         register(flutterPluginBinding.getBinaryMessenger(), this, flutterPluginBinding.getApplicationContext());
         hasStarted = true;
     }
@@ -144,10 +154,16 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
                     handleReject();
                     break;
                 case Constants.ACTION_ACCEPT:
+                        String source = intent.getStringExtra("Source");
+                        if (source != null) {
+                            Log.d(TAG, "handleIncomingCallIntent: Source -> " + source);
+                        }
+
                         int acceptOrigin = intent.getIntExtra(Constants.ACCEPT_CALL_ORIGIN,0);
                         if(acceptOrigin == 0){
                              Intent answerIntent = new Intent(activity, AnswerJavaActivity.class);
                             answerIntent.setAction(Constants.ACTION_ACCEPT);
+                            answerIntent.putExtra("Source", "TwilioVoicePlugin#handleIncomingCallIntent");
                             answerIntent.putExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, activeCallNotificationId);
                             answerIntent.putExtra(Constants.INCOMING_CALL_INVITE, activeCallInvite);
                             answerIntent.addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -233,6 +249,7 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
     }
 
     private void registerReceiver() {
+        Log.d(TAG, "registerReceiver: Registering receiver in TwilioVoicePlugin");
         if (!isReceiverRegistered) {
             Log.d(TAG, "registerReceiver");
             IntentFilter intentFilter = new IntentFilter();
@@ -298,6 +315,11 @@ public class TwilioVoicePlugin implements FlutterPlugin, MethodChannel.MethodCal
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
             Log.d(TAG, "Received broadcast for action " + action);
+
+            String source = intent.getStringExtra("Source");
+            if (source != null) {
+                Log.d(TAG, "onReceive: Source -> " + source);
+            }
 
             if (action != null)
                 switch (action) {
