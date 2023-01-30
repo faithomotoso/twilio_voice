@@ -122,6 +122,12 @@ class TwilioVoice {
     return _channel.invokeMethod("backgroundCallUI", {});
   }
 
+  /// Returns the active call, rough patch-y implementation
+  /// Active call is returned through the event handler
+  Future<bool?> getActiveCall() async {
+    return _channel.invokeMethod("getActiveCall");
+  }
+
   CallEventM _parseCallEvent(String state) {
     if (state.startsWith("DEVICETOKEN|")) {
       var token = state.split('|')[1];

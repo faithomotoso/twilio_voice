@@ -110,6 +110,7 @@ public class AnswerJavaActivity extends AppCompatActivity {
             }
 
             activeCallInvite = intent.getParcelableExtra(Constants.INCOMING_CALL_INVITE);
+            TwilioVoicePlugin.setActiveCallInvite(activeCallInvite);
             activeCallNotificationId = intent.getIntExtra(Constants.INCOMING_CALL_NOTIFICATION_ID, 0);
             tvCallStatus.setText(R.string.incoming_call_title);
             switch (action) {
