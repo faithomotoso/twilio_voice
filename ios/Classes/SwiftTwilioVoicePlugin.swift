@@ -5,9 +5,11 @@ import PushKit
 import TwilioVoice
 import CallKit
 import UserNotifications
+import os.log
 
 public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHandler, PKPushRegistryDelegate, NotificationDelegate, CallDelegate, AVAudioPlayerDelegate, CXProviderDelegate {
-    
+
+    let log = OSLog(subsystem: Bundle.main.bundleIdentifier!, category: "calls")
 
     var _result: FlutterResult?
     private var eventSink: FlutterEventSink?
@@ -101,6 +103,8 @@ public class SwiftTwilioVoicePlugin: NSObject, FlutterPlugin,  FlutterStreamHand
     
     public func handle(_ flutterCall: FlutterMethodCall, result: @escaping FlutterResult) {
         _result = result
+        
+        os_log("SwiftTwilioPlugin called with method -> %s", flutterCall.method)
         
         let arguments:Dictionary<String, AnyObject> = flutterCall.arguments as! Dictionary<String, AnyObject>;
         

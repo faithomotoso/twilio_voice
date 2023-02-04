@@ -125,7 +125,7 @@ class TwilioVoice {
   /// Returns the active call, rough patch-y implementation
   /// Active call is returned through the event handler
   Future<bool?> getActiveCall() async {
-    return _channel.invokeMethod("getActiveCall");
+    return _channel.invokeMethod("getActiveCall", {});
   }
 
   CallEventM _parseCallEvent(String state) {
